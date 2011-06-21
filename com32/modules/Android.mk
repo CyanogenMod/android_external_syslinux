@@ -3,6 +3,7 @@ LOCAL_PATH:= $(call my-dir)
 include $(LOCAL_PATH)/../com32_build_prebuilt.mk
 
 C32_MODULES := \
+	android.c32 \
 	cat.c32 \
 	chain.c32 \
 	cmd.c32 \
