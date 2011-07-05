@@ -803,7 +803,7 @@ err_alloc_iter:
  * for the partition containing the kernel we want, parse
  * the boot image header, get the kernel, ramdisk, and cmdline data,
  * and boot it */
-static void do_boot(uint64_t lba)
+static void do_boot(uint64_t lba, char *cmdline)
 {
     struct boot_img_hdr *boot_img_hdr = NULL;
     struct initramfs *initramfs = NULL;
@@ -857,6 +857,18 @@ static void do_boot(uint64_t lba)
         goto error_out;
     }
 
+    if (cmdline) {
+        /* append user provided cmdline to the existing one */
+        int boot_cmdline_len = strlen(boot_img_hdr->cmdline);
+        int cmdline_len = strlen(cmdline);
+        if (cmdline_len < (BOOT_ARGS_SIZE - boot_cmdline_len - 1)) {
+            /* length already checked for */
+            strcat(boot_img_hdr->cmdline, " ");
+            strcat(boot_img_hdr->cmdline, cmdline);
+        } else
+            error("kernel cmdline too big, sticking to original cmdline\n");
+    }
+
     dprintf("cmdline: '%s'\n", boot_img_hdr->cmdline);
     syslinux_boot_linux(kernel_data, kernel_len, initramfs,
             boot_img_hdr->cmdline);
@@ -873,15 +885,44 @@ error_out:
 
 
 
+/* Stitch together the command line from a set of argv's */
+static char *make_cmdline(char **argv)
+{
+    char **arg;
+    size_t bytes;
+    char *cmdline, *p;
+
+    bytes = 1;                  /* Just in case we have a zero-entry cmdline */
+    for (arg = argv; *arg; arg++) {
+        bytes += strlen(*arg) + 1;
+    }
+
+    p = cmdline = malloc(bytes);
+    if (!cmdline)
+        return NULL;
+
+    for (arg = argv; *arg; arg++) {
+        int len = strlen(*arg);
+        memcpy(p, *arg, len);
+        p[len] = ' ';
+        p += len + 1;
+    }
+
+    if (p > cmdline)
+        p--;                    /* Remove the last space */
+    *p = '\0';
+
+    return cmdline;
+}
+
 static void usage(void)
 {
     static const char usage[] = "\
-Usage:  android.c32 <disk#> <partition>\n\
-use 'current' for disk# to use the device syslinux started from\n";
+Usage:  android.c32 <disk#> <partition> [kernel cmdline]\n\
+use 'current' for disk# to use the device syslinux started from\n\
+kernel cmdline will be appended to existing one\n";
     printf(usage);
 }
-
-
 
 int main(int argc, char *argv[])
 {
@@ -891,8 +932,8 @@ int main(int argc, char *argv[])
 
     openconsole(&dev_null_r, &dev_stdcon_w);
 
-    if (argc != 3) {
-        error("expecting 2 parameters\n");
+    if (argc < 3) {
+        error("expecting at least 2 parameters\n");
         usage();
         goto bail;
     }
@@ -930,7 +971,7 @@ int main(int argc, char *argv[])
         goto bail;
     }
 
-    do_boot(cur_part->lba_data);
+    do_boot(cur_part->lba_data, make_cmdline(&argv[3]));
 
 bail:
     error("Unable to boot Android image...\n");
