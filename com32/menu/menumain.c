@@ -1146,6 +1146,16 @@ int main(int argc, char *argv[])
 	return 1;		/* Error! */
     }
 
+    if (misc_boot_label) {
+	for (i = 0; i < cm->nentries; i++) {
+	    if (!strcmp(cm->menu_entries[i]->label, misc_boot_label)) {
+		cm->defentry = i;
+		cm->curentry = i;
+		break;
+	    }
+	}
+    }
+
     for (;;) {
 	local_cursor_enable(true);
 	cmdline = run_menu();

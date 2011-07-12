@@ -121,6 +121,8 @@ LIBOBJS = \
 	syslinux/adv.o syslinux/advwrite.o syslinux/getadv.o		\
 	syslinux/setadv.o						\
 	\
+	syslinux/rawio.o						\
+	\
 	syslinux/video/fontquery.o syslinux/video/forcetext.o		\
 	syslinux/video/reportmode.o
 

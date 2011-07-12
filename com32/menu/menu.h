@@ -233,4 +233,6 @@ void execute(const char *cmdline, enum kernel_type type);
 /* drain.c */
 void drain_keyboard(void);
 
+extern char *misc_boot_label;
+
 #endif /* MENU_H */

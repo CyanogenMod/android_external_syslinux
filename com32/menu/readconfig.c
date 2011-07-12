@@ -25,12 +25,16 @@
 #include <syslinux/config.h>
 
 #include "menu.h"
+#include "miscptn.h"
 
 /* Empty refstring */
 const char *empty_string;
 
 /* Root menu, starting menu, hidden menu, and list of all menus */
 struct menu *root_menu, *start_menu, *hide_menu, *menu_list;
+
+/* Label specified in the Android 'misc' partition, if extant */
+char *misc_boot_label;
 
 /* These are global parameters regardless of which menu we're displaying */
 int shiftkey = 0;		/* Only display menu if shift key pressed */
@@ -895,6 +899,9 @@ static void parse_config_file(FILE * f)
 		x = strtoul(ep, &ep, 0);
 		y = strtoul(skipspace(ep), NULL, 0);
 		set_resolution(x, y);
+	    } else if (looking_at(p, "androidcommand")) {
+		int partnum = atoi(skipspace(p + 14));
+		misc_boot_label = read_misc_partition(-1, partnum);
 	    } else {
 		/* Unknown, check for layout parameters */
 		enum parameter_number mp;
