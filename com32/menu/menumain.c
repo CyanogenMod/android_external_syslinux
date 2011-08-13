@@ -718,7 +718,7 @@ static const char *do_hidden_menu(void)
     if (!setjmp(timeout_jump)) {
 	timeout_left = cm->timeout;
 
-	while (!cm->timeout || timeout_left) {
+	while (timeout_left) {
 	    int tol = timeout_left / CLK_TCK;
 
 	    print_timeout_message(tol, HIDDEN_ROW, cm->messages[MSG_AUTOBOOT]);
