@@ -1,3 +1,4 @@
+ifneq ($(strip $(TARGET_NO_BOOTLOADER)),true)
 ifeq ($(TARGET_USE_SYSLINUX),true)
 
 include $(all-subdir-makefiles)
@@ -11,7 +12,7 @@ SYSLINUX_MK_IMG := external/syslinux/utils/android-image.sh
 # TARGET_SYSLINUX_CONFIG - file to use as syslinux.cfg
 # These should be defined in BoardConfig.mk per-product
 
-$(INSTALLED_BOOTLOADER_MODULE): \
+$(PRODUCT_OUT)/bootloader: \
 		$(TARGET_SYSLINUX_FILES) \
 		$(TARGET_SYSLINUX_CONFIG) \
 		$(SYSLINUX_BIN) \
@@ -27,4 +28,5 @@ $(INSTALLED_BOOTLOADER_MODULE): \
 .PHONY: syslinux-image
 syslinux-image: $(INSTALLED_BOOTLOADER_MODULE)
 
+endif
 endif
