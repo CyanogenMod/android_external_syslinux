@@ -29,6 +29,11 @@ while [ $# -gt 0 ]; do
             shift
             ;;
 
+        --extra-size)
+            EXTRA_SIZE="$2"
+            shift
+            ;;
+
         --help)
             echo "Usage: $0 OPTIONS <files to copy>"
             echo "Create a FAT32 image that contains everything necessary"
@@ -39,6 +44,7 @@ while [ $# -gt 0 ]; do
             echo "                                  does not need to currently exist and will be deleted"
             echo "  --config <file>                 File to use as syslinux.cfg"
             echo "  --output <output>               The filename of the output image"
+            echo "  --extra-size <size>             Custom extra size of the of the output image"
             echo
             exit 0
             ;;
@@ -95,6 +101,9 @@ reserve=10
 
 # Add on top of slack space 32K for ldloader.sys
 boot_size=$(($boot_size + $extra + 32))
+
+# Add a custom slack space for the platforms that need it.
+boot_size=$(($boot_size + ${EXTRA_SIZE:-0}))
 
 # Round the size of the disk up to 16K so that total sectors is
 # a multiple of sectors per track (mtools complains otherwise)

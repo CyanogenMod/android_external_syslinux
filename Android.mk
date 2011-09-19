@@ -12,13 +12,17 @@ SYSLINUX_MK_IMG := external/syslinux/utils/android-image.sh
 # TARGET_SYSLINUX_CONFIG - file to use as syslinux.cfg
 # These should be defined in BoardConfig.mk per-product
 
+ifdef TARGET_SYSLINUX_IMAGE_EXTRA_SPACE
+	SYSLINUX_EXTRA_SPACE_PARAM := --extra-size $(TARGET_SYSLINUX_IMAGE_EXTRA_SPACE)
+endif
+
 $(PRODUCT_OUT)/bootloader: \
 		$(TARGET_SYSLINUX_FILES) \
 		$(TARGET_SYSLINUX_CONFIG) \
 		$(SYSLINUX_BIN) \
 		$(SYSLINUX_MK_IMG)
 	$(call pretty, "Target SYSLINUX image: $@")
-	$(SYSLINUX_MK_IMG) \
+	$(SYSLINUX_MK_IMG) $(SYSLINUX_EXTRA_SPACE_PARAM) \
 		--syslinux $(SYSLINUX_BIN) \
 		--tmpdir $(call intermediates-dir-for,EXECUTABLES,syslinux-img)/syslinux-img \
 		--config $(TARGET_SYSLINUX_CONFIG) \
