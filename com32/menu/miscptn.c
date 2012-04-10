@@ -79,6 +79,11 @@ static struct bootloader_oneshot_cmd *get_oneshot_boot_target(
 	free(cmd);
 	cmd = NULL;
     }
+    /* Historical: 'reboot bootloader' means enter Fastboot mode
+     * (which is not implemented in the bootloader but another boot
+     * image) */
+    if (!strcmp(cmd->boot_target, "bootloader"))
+        strncpy(cmd->boot_target, "fastboot", sizeof(cmd->boot_target));
 
     /* This mechanism is oneshot; unconditionally zero it out */
     memset(data, 0, sizeof(*cmd));
