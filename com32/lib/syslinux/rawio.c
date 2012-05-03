@@ -664,7 +664,8 @@ struct disk_part_iter *rawio_get_first_partition(struct disk_part_iter *part)
     part->next = next_mbr_part;
     /* Check for a GPT disk */
     gpt_candidate = (const struct gpt *)(part->block + SECTOR);
-    if (!memcmp(gpt_candidate->sig, gpt_sig_magic, sizeof(gpt_sig_magic))) {
+    if (((struct mbr *)part->block)->table[0].ostype == 0xEE &&
+            !memcmp(gpt_candidate->sig, gpt_sig_magic, sizeof(gpt_sig_magic))) {
 	/* LBA for partition table */
 	uint64_t lba_table;
 
