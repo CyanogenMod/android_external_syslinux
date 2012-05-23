@@ -9,28 +9,33 @@
 #include "miscptn.h"
 
 #define error(...) fprintf(stderr, __VA_ARGS__)
+#define BCB_MAGIC	0xFEEDFACE
 
-/* Persistent area written by recovery mechanism for communication
- * with the bootloader */
+/* Persistent area written by Android recovery console and Linux bcb driver
+ * reboot hook for communication with the bootloader */
 struct bootloader_message {
+    /* Directive to the bootloader on what it needs to do next.
+     * Possible values:
+     *   boot-NNN - Automatically boot into label NNN
+     *   bootonce-NNN - Automatically boot into label NNN, clearing this
+     *     field afterwards
+     *   anything else / garbage - Boot default label */
     char command[32];
+
+    /* Storage area for error codes when using the BCB to boot into special
+     * boot targets, e.g. for baseband update. */
     char status[32];
+
+    /* Area for recovery console to stash its command line arguments
+     * in case it is reset and the cache command file is erased.
+     * Not used here. */
     char recovery[1024];
+
+    /* Magic sentinel value written by the bootloader; kernel/userspace won't
+     * update this if not equalto to BCB_MAGIC */
+    uint32_t magic;
 };
 
-/* Struct to write to misc partition to tell bootloader that it needs
- * to boot into the specified label on next reboot. This is always
- * oneshot; bootloader should clear this on each boot, and should
- * gracefully handle it containing garbage.
- *
- * This is separate from the recovery Bootloader Control Block, which
- * is written at offset 0 and is persistent until specifically cleared */
-struct bootloader_oneshot_cmd {
-    char boot_target[32];
-};
-
-/* Offset in misc partition to read/write command */
-#define BOOTLOADER_ONESHOT_SECTOR_OFFSET   4
 
 static struct bootloader_message *get_bootloader_message(
 	    struct disk_part_iter *cur_part)
@@ -38,68 +43,40 @@ static struct bootloader_message *get_bootloader_message(
     struct bootloader_message *msg;
 
     msg = rawio_read_sectors(cur_part->lba_data, size_to_sectors(sizeof(*msg)));
-    if (!msg) {
-	error("rawio_read_sectors failed to get bootloader_message");
+    if (!msg)
 	return NULL;
-    }
+
     /* Null terminate everything, could be garbage */
     msg->command[sizeof(msg->command) - 1] = '\0';
     msg->status[sizeof(msg->status) - 1] = '\0';
     msg->recovery[sizeof(msg->recovery) - 1] = '\0';
 
-    printf("command: '%s'", msg->command);
-
     return msg;
 }
 
-static struct bootloader_oneshot_cmd *get_oneshot_boot_target(
-	    struct disk_part_iter *cur_part)
+static int put_bootloader_message(struct disk_part_iter *cur_part,
+	    struct bootloader_message *bcb)
 {
-    struct bootloader_oneshot_cmd *cmd = NULL;
-    char *data = NULL;
-    uint64_t lba;
+    unsigned char *out_sect;
+    int ret = 0;
+    unsigned int i;
 
-    lba = cur_part->lba_data + BOOTLOADER_ONESHOT_SECTOR_OFFSET;
-    data = rawio_read_sectors(lba, 1);
-    if (!data) {
-	error("rawio_read_sectors failed to get oneshot target");
-	goto bail;
+    out_sect = malloc(size_to_sectors(sizeof(*bcb)) * SECTOR);
+    memcpy(out_sect, bcb, sizeof(*bcb));
+
+    for(i = 0; i < size_to_sectors(sizeof(*bcb)); i++) {
+	ret |= rawio_write_sector(cur_part->lba_data + i, out_sect);
+	out_sect += SECTOR;
     }
-
-    cmd = malloc(sizeof(*cmd));
-    if (!cmd)
-	goto bail;
-    memcpy(cmd, data, sizeof(*cmd));
-
-    /* Could be garbage; ensure it's null terminated */
-    cmd->boot_target[sizeof(cmd->boot_target) - 1] = '\0';
-
-    /* Empty string means no command; return NULL */
-    if (cmd->boot_target[0] == '\0') {
-	free(cmd);
-	cmd = NULL;
-    }
-    /* Historical: 'reboot bootloader' means enter Fastboot mode
-     * (which is not implemented in the bootloader but another boot
-     * image) */
-    if (!strcmp(cmd->boot_target, "bootloader"))
-        strncpy(cmd->boot_target, "fastboot", sizeof(cmd->boot_target));
-
-    /* This mechanism is oneshot; unconditionally zero it out */
-    memset(data, 0, sizeof(*cmd));
-    rawio_write_sector(lba, data);
-bail:
-    if (data)
-	free(data);
-    return cmd;
+    return ret;
 }
 
 char *read_misc_partition(int disk, int partnum)
 {
     struct disk_part_iter *cur_part;
-    struct bootloader_oneshot_cmd *oneshot_cmd = NULL;
     struct bootloader_message *bcb = NULL;
     char *boot_target = NULL;
+    int dirty = 0;
 
     cur_part = rawio_get_partition(disk, partnum);
     if (!cur_part) {
@@ -107,21 +84,33 @@ char *read_misc_partition(int disk, int partnum)
 	return NULL;
     }
 
-    /* Try reading bootloader control block first */
     bcb = get_bootloader_message(cur_part);
-    if (bcb && !strncmp(bcb->command, "boot-", 5)) {
-	boot_target = strdup(bcb->command + 5);
-	goto out;
+    if (!bcb) {
+	error("failed to get bootloader_message");
+	return NULL;
     }
 
-    /* Failing that, check for a oneshot boot target */
-    oneshot_cmd = get_oneshot_boot_target(cur_part);
-    if (oneshot_cmd)
-	boot_target = strdup(oneshot_cmd->boot_target);
+    if (!strncmp(bcb->command, "boot-", 5)) {
+	boot_target = strdup(bcb->command + 5);
+    } else if (bcb && !strncmp(bcb->command, "bootonce-", 9)) {
+	boot_target = strdup(bcb->command + 9);
+	bcb->command[0] = '\0';
+	dirty = 1;
+    }
+    if (bcb->magic != BCB_MAGIC) {
+	bcb->magic = BCB_MAGIC;
+	dirty = 1;
+    }
 
-out:
-    if (oneshot_cmd)
-	free(oneshot_cmd);
+    /* Historical: 'reboot bootloader' means enter Fastboot mode
+     * (which is not implemented in the bootloader but another boot
+     * image) */
+    if (!strcmp(boot_target, "bootloader"))
+	strcpy(boot_target, "fastboot");
+
+    if (dirty && put_bootloader_message(cur_part, bcb))
+	error("failed to update bootloader message");
+
     if (bcb)
 	free(bcb);
     if (cur_part) {
