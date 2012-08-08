@@ -25,7 +25,6 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <inttypes.h>
-#include <mntent.h>
 #include <paths.h>
 #include <stdio.h>
 #include <string.h>
@@ -132,6 +131,7 @@ int main(int argc, char *argv[])
     int status;
     const char *tmpdir;
     char *mtools_conf;
+    char *dev_name;
     int mtc_fd;
     FILE *mtc, *mtp;
     struct libfat_filesystem *fs;
@@ -212,15 +212,26 @@ int main(int argc, char *argv[])
     if (mtc_fd < 0 || !(mtc = fdopen(mtc_fd, "w")))
 	die_err(mtools_conf);
 
+#if defined(__APPLE__)
+    /* on Darwin machines, there is no /proc, so we have to use full path */
+    if (asprintf(&dev_name, "%s", opt.device) < 0) {
+#else
+    if (asprintf(&dev_name, "/proc/%lu/fd/%d", (unsigned long)mypid, dev_fd) < 0) {
+#endif
+	die_err(opt.device);
+    }
+
     fprintf(mtc,
 	    /* These are needed for some flash memories */
 	    "MTOOLS_SKIP_CHECK=1\n"
 	    "MTOOLS_FAT_COMPATIBILITY=1\n"
 	    "drive s:\n"
-	    "  file=\"/proc/%lu/fd/%d\"\n"
+	    "  file=\"%s\"\n"
 	    "  offset=%llu\n",
-	    (unsigned long)mypid,
-	    dev_fd, (unsigned long long)opt.offset);
+	    dev_name,
+	    (unsigned long long)opt.offset);
+
+    free(dev_name);
 
     if (ferror(mtc) || fclose(mtc))
 	die_err(mtools_conf);
