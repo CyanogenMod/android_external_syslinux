@@ -25,3 +25,10 @@ LOCAL_CFLAGS := \
 	-D_PATH_UMOUNT=\"/system/bin/umount\" \
 
 include $(BUILD_EXECUTABLE)
+
+# Create an explicit dependency with full path
+.PHONY: $(LOCAL_MODULE_PATH)$(LOCAL_MODULE)
+$(LOCAL_MODULE_PATH)$(LOCAL_MODULE): $(LOCAL_MODULE)
+
+# android_syslinux can be included in OTA/recovery if needed
+INSTALLED_SYSLINUX_TARGET_EXEC := $(PRODUCT_OUT)/syslinux/bin/android_syslinux

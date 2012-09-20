@@ -94,9 +94,9 @@ cp -f $CONFIG $TMPDIR/syslinux.cfg
 
 boot_size=`du -sk $TMPDIR | tail -n1 | awk '{print $1;}'`
 
-# add 1% extra space, minimum 10K
+# add 1% extra space, minimum 512K
 extra=$(($boot_size / 100))
-reserve=10
+reserve=512
 [ $extra -lt $reserve ] && extra=$reserve
 
 # Add on top of slack space 32K for ldloader.sys
